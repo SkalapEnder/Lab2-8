@@ -22,7 +22,9 @@
 <div class="container-fluid text-center mt-4 p-4 w-50 shadow bg-white rounded">
     <h1>Welcome to Bookstore!</h1>
     <p class="fs-4">Welcome to Bookstore. You can create new book, retrieve info about books, update and delete them.</p>
-    <button class="btn btn-success">Create New Book</button>
+    <form action="/create" method="GET">
+        <button class="btn btn-success">Create New Book</button>
+    </form>
 </div>
 
 <div class="container-fluid text-center my-4 p-4 w-75 shadow bg-white rounded">
@@ -33,45 +35,58 @@
     <% } %>
 
     <!-- Filter and Sort Options -->
-    <div class="container bg-white rounde my-3 p-1">
+    <div class="container bg-white rounded my-3 p-1">
+        <h2>Filters</h2>
+        <hr>
+        <div class="container-fluid mb-4 justify-content-center">
+            <form action="/api/books" method="GET" class="d-flex justify-content-center align-items-center mx-auto w-50 mb-2">
+                <label for="id" class="w-50 me-2">Search Book by ID: </label>
+                <input type="number" id="id" placeholder="Search by Book ID (e.g., 1)" name="id" class="form-control me-2">
+                <button type="submit" class="btn btn-secondary fs-5">Search</button>
+            </form>
+        </div>
+        <hr>
 
-            <div class="mb-4 d-flex  justify-content-around">
-                <input type="number" id="searchInput" placeholder="Search by Book ID (e.g., 1)" class="form-control w-25 me-2">
-                <input type="text" id="searchInput" placeholder="Search by title, author, or genre" class="form-control">
-                <button class="btn btn-primary ms-2 mt-2 fs-5" onclick="applyFilters()">Search</button>
+        <form action="/api/books/filter" method="POST" class="mb-2">
+            <div class="d-flex justify-content-center align-items-center mx-auto mb-2">
+                <label for="search" class="w-25 me-2">Search Book by Filters: </label>
+                <input type="text" id="search" placeholder="Search by title, author, or genre" name="search" class="form-control me-2">
             </div>
 
 
-            <div class="mb-4">
-                <select id="genreFilter" class="form-select d-inline-block w-auto">
-                    <option value="">All Genres</option>
-                    <% genres.forEach(genre => { %>
-                        <option value="<%= genre %>"><%= genre %></option>
-                    <% }); %>
-                </select>
-                <select id="authorFilter" class="form-select d-inline-block w-auto">
-                    <option value="">All Authors</option>
-                    <% authors.forEach(author => { %>
-                        <option value="<%= author %>"><%= author %></option>
-                    <% }); %>
-                </select>
-                <select id="yearFilter" class="form-select d-inline-block w-auto">
-                    <option value="">All Years</option>
-                    <% years.forEach(year => { %>
-                        <option value="<%= year %>"><%= year %></option>
-                    <% }); %>
-                </select>
-                <select id="sortBy" class="form-select d-inline-block w-auto">
-                    <option value="title">Sort by Title</option>
-                    <option value="author">Sort by Author</option>
-                    <option value="year">Sort by Year</option>
-                    <option value="price">Sort by Price</option>
-                </select>
-            </div>
+
+            <select id="genreFilter" name="genre" class="form-select d-inline-block w-auto">
+                <option value="none">All Genres</option>
+                <% genres.forEach(genre => { %>
+                    <option value="<%= genre %>"><%= genre %></option>
+                <% }); %>
+            </select>
+            <select id="authorFilter" name="author" class="form-select d-inline-block w-auto">
+                <option value="none">All Authors</option>
+                <% authors.forEach(author => { %>
+                    <option value="<%= author %>"><%= author %></option>
+                <% }); %>
+            </select>
+            <select id="yearFilter" name="year" class="form-select d-inline-block w-auto">
+                <option value="none">All Years</option>
+                <% years.forEach(year => { %>
+                    <option value="<%= year %>"><%= year %></option>
+                <% }); %>
+            </select>
+            <select id="sortBy" name="sortBy" class="form-select d-inline-block w-auto">
+                <option value="title">Sort by Title</option>
+                <option value="author">Sort by Author</option>
+                <option value="year">Sort by Year</option>
+                <option value="price">Sort by Price</option>
+            </select>
+
+            <button type="submit" class="btn btn-secondary fs-5">Search</button>
+        </form>
     </div>
 
     <!-- Table -->
     <h2>Books:</h2>
+        <hr>
     <table class="table table-striped">
         <thead>
         <tr>
@@ -86,23 +101,29 @@
         </tr>
         </thead>
         <tbody>
-        <% books.forEach(function(book) { %>
-            <tr style="height: 50px;" data-book-id="<%= book.book_id %>">
-                <td><%= book.book_id %></td>
-                <td><input type="text" class="book-title" value="<%= book.title %>"></td>
-                <td><input type="text" class="book-author" value="<%= book.author.join(', ') %>"></td>
-                <td><input type="text" class="book-genre" value="<%= book.genre.join(', ') %>"></td>
-                <td><input type="number" class="book-year" value="<%= book.year %>"></td>
-                <td><input type="number" class="book-quantity" value="<%= book.quantity %>"></td>
-                <td><input type="number" class="book-price" value="<%= book.price %>"></td>
-                <td>
-                    <div>
-                        <button class="btn btn-outline-secondary mb-3" onclick="updateBook('<%= book.book_id %>')">Update Book</button>
-                        <button class="btn btn-outline-danger mb-3" onclick="deleteBook('<%= book.book_id %>')">Delete Book</button>
-                    </div>
-                </td>
+        <% if (books.length === 0) { %>
+            <tr>
+                <td colspan="8" style="text-align: center;">No books available.</td>
             </tr>
-        <% }); %>
+        <% } else { %>
+            <% books.forEach(function(book) { %>
+                <tr style="height: 50px;" data-book-id="<%= book.book_id %>">
+                    <td><%= book.book_id %></td>
+                    <td><input type="text" class="book-title" value="<%= book.title %>"></td>
+                    <td><input type="text" class="book-author" value="<%= book.authors.join(', ') %>"></td>
+                    <td><input type="text" class="book-genre" value="<%= book.genres.join(', ') %>"></td>
+                    <td><input type="number" class="book-year" style="width: 80px;" value="<%= book.year %>"></td>
+                    <td><input type="number" class="book-quantity" style="width: 80px;" value="<%= book.quantity %>"></td>
+                    <td><input type="number" class="book-price" style="width: 80px;" value="<%= book.price %>"></td>
+                    <td>
+                        <div>
+                            <button class="btn btn-outline-secondary mb-3" onclick="updateBook('<%= book.book_id %>')">Update Book</button>
+                            <button class="btn btn-outline-danger mb-3" onclick="deleteBook('<%= book.book_id %>')">Delete Book</button>
+                        </div>
+                    </td>
+                </tr>
+            <% }); %>
+        <% } %>
         </tbody>
     </table>
 
@@ -122,17 +143,6 @@
 </div>
 
 <script>
-    function applyFilters() {
-        const search = document.getElementById('searchInput').value;
-        const genre = document.getElementById('genreFilter').value;
-        const author = document.getElementById('authorFilter').value;
-        const year = document.getElementById('yearFilter').value;
-        const sortBy = document.getElementById('sortBy').value;
-
-        let url = `/?search=${search}&genre=${genre}&author=${author}&year=${year}&sortBy=${sortBy}`;
-        window.location.href = url;
-    }
-
     async function updateBook(bookId) {
         try {
             const bookRow = document.querySelector(`[data-book-id="${bookId}"]`);
@@ -144,7 +154,7 @@
             const quantity = parseInt(bookRow.querySelector('.book-quantity').value);
             const price = parseFloat(bookRow.querySelector('.book-price').value);
 
-            const response = await fetch(`/books/put/${bookId}`, {
+            const response = await fetch(`/api/books/${bookId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, author, genre, year, quantity, price }),
@@ -165,7 +175,7 @@
 
     async function deleteBook(bookId) {
         try {
-            const response = await fetch(`/books/delete/${bookId}`, { method: 'DELETE' });
+            const response = await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
 
             if (response.ok) {
                 alert('Book Was Deleted');

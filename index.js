@@ -19,20 +19,25 @@ mongoose.connect('mongodb+srv://skalap2endra:kGOM7z5V54vBFdp1@cluster0.vannl.mon
 // ################################
 app.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
-        const data = await getBooks(page, limit);
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10;
+        const skip = (page - 1) * limit;
 
-        const genres = await Book.distinct('genre');
-        const authors = await Book.distinct('author');
+        // Fetch paginated books
+        const books = await Book.find().skip(skip).limit(limit);
+        const totalBooks = await Book.countDocuments();
+
+        const genres = await Book.distinct('genres');
+        const authors = await Book.distinct('authors');
         const years = await Book.distinct('year');
 
         res.render('index', {
-            books: data.books,
-            totalPages: data.totalPages,
-            currentPage: data.currentPage,
-            genres,
-            authors,
-            years,
+            books: books,
+            totalPages: Math.ceil(totalBooks / limit),
+            currentPage: page,
+            genres: genres,
+            authors: authors,
+            years: years,
             error: null,
         });
     } catch (error) {
@@ -40,6 +45,8 @@ app.get('/', async (req, res) => {
         res.render('index', { books: [], error: 'Failed to fetch books.' });
     }
 });
+
+app.get('/create', async (req, res) => { res.render('create')});
 
 // Routes
 // ################################
@@ -57,46 +64,124 @@ app.post('/api/books', async (req, res) => {
         return res.status(400).json({ message: 'All fields (title, author, genre, year, quantity, price) are required '});
     }
 
+    const authors = author.split(',').map(a => a.trim());
+    const genres = genre.split(',').map(g => g.trim());
+
     try {
         const newID = await getNextFreeBookId();
         const newBook = new Book({
             book_id: newID,
             title: title,
-            author: author,
-            genre: genre,
+            authors: authors,
+            genres: genres,
             year: year,
             quantity: quantity,
             price: price,
         });
         await newBook.save();
-        res.status(201).json(newBook);
+        res.redirect('/');
     } catch (err) {
         res.status(500).json({ message: 'Error creating book', error: err });
     }
 });
 
 // All books
-app.get('/api/books', async (req, res) => {
+app.get("/api/books", async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
-        const data = await getBooks(page, limit);
-        res.json(data);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Fetch paginated books
+        const books = await Book.find().skip(skip).limit(limit);
+        const totalBooks = await Book.countDocuments();
+
+        res.json({
+            books,
+            totalPages: Math.ceil(totalBooks / limit),
+            currentPage: page,
+            totalBooks
+        });
     } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to fetch books' });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Failed to fetch books" });
     }
 });
+
 // Specific book by ID
-app.get('/api/books/:id', async (req, res) => {
-    const { id } = req.params;
+app.get("/api/books/:id", async (req, res) => {
+    const book_id = Number(req.params.id);
+    console.log("2", book_id);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    console.log(book_id)
     try {
-        const book = await Book.findOne({book_id: id});
-        if (book === null || book === undefined) {
-            return res.status(404).json({ message: 'Book not found' });
+        let books = await Book.find({ book_id: book_id }).skip(skip).limit(limit);
+        const totalBooks = await Book.countDocuments({ book_id: book_id });
+
+        if (!books || books.length === 0) {
+            return res.status(404).json({ books: [], error: "Book not found" });
         }
-        res.json(book);
+
+        const genres = await Book.distinct('genres');
+        const authors = await Book.distinct('authors');
+        const years = await Book.distinct('year');
+        console.log("HERE")
+        res.render('index', {
+            books: books,
+            totalPages: Math.ceil(totalBooks / limit),
+            currentPage: page,
+            genres: genres,
+            authors: authors,
+            years: years,
+            error: null,
+        });
     } catch (err) {
-        res.status(500).json({ message: 'Error retrieving book', error: err });
+        console.error("Error retrieving book:", err);
+        res.status(500).json({ message: "Error retrieving books", error: err });
+    }
+});
+
+// Filtering part
+app.post('/api/books/filter', async (req, res) => {
+    const { genre, author, year, sortBy, search } = req.query;
+
+    try {
+        let query = {};
+
+        if (genre !== "none") query.genres = { $in: [genre] };
+
+        if (author !== "none") query.authors = { $in: [author] };
+
+        if (year !== "none") query.year = year;
+
+        if (search !== "") {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } }
+            ];
+        } else {
+            query.$or = [{ title: {} }];
+        }
+
+        let books = await Book.find(query);
+
+        if (sortBy) {
+            const sortOptions = {
+                title: { title: 1 },
+                author: { authors: 1 },
+                year: { year: 1 },
+                price: { price: 1 }
+            };
+
+            if (sortOptions[sortBy]) {
+                books = books.sort(sortOptions[sortBy]);
+            }
+        }
+
+        res.json(books);
+    } catch (err) {
+        res.status(500).json({ message: 'Error retrieving books', error: err });
     }
 });
 
@@ -105,14 +190,14 @@ app.put('/api/books/:id', async (req, res) => {
     const { id } = req.params;
     const { title, author, genre, year, quantity, price } = req.body;
 
-    if (!title || !author || !genre || !year) {
+    if (title === null || author === null || genre === null || year === null) {
         return res.status(400).json({ message: 'All fields (title, author, genre, year, quantity, price) are required' });
     }
 
     try {
         const updatedBook = await Book.findOneAndUpdate(
             { book_id: id },
-            { title: title, author: author, genre: genre, year: year, quantity: quantity, price: price },
+            { title: title, authors: author, genres: genre, year: year, quantity: quantity, price: price },
             { new: true }
         );
         if (updatedBook=== null) {
@@ -132,7 +217,7 @@ app.delete('/api/books/:id', async (req, res) => {
         if (deletedBook === null) {
             return res.status(404).json({ message: 'Book not found' });
         }
-        res.json(deletedBook);
+        res.status(200).json(deletedBook);
     } catch (err) {
         res.status(500).json({ message: 'Error deleting book', error: err });
     }
@@ -153,21 +238,5 @@ async function getNextFreeBookId() {
     } catch (err) {
         console.error('Error retrieving next free user_id:', err.message);
         throw new Error('Failed to retrieve next free user ID');
-    }
-}
-
-async function getBooks(page = 1, limit = 10, filters = {}) {
-    try {
-        const skip = (page - 1) * limit;
-        const books = await Book.find(filters).skip(skip).limit(limit);
-        const totalBooks = await Book.countDocuments(filters);
-        return {
-            books,
-            totalPages: Math.ceil(totalBooks / limit),
-            currentPage: page,
-        };
-    } catch (error) {
-        console.error('Error fetching books:', error);
-        throw new Error('Failed to fetch books');
     }
 }
