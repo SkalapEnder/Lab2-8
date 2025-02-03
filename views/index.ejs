@@ -10,6 +10,12 @@
         body{
             background-color: #dbdbdb;
         }
+        input{
+            border: 1px black dashed;
+            font-size: 18px;
+            padding: 5px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -21,13 +27,13 @@
 
 <div class="container-fluid text-center mt-4 p-4 w-50 shadow bg-white rounded">
     <h1>Welcome to Bookstore!</h1>
-    <p class="fs-4">Welcome to Bookstore. You can create new book, retrieve info about books, update and delete them.</p>
+    <p class="fs-4">Welcome to Bookstore. You can create new book, retrieve info about books, update and delete them. <br>P.S.: <b>-1</b> - No search by ID</p>
     <form action="/create" method="GET">
         <button class="btn btn-success">Create New Book</button>
     </form>
 </div>
 
-<div class="container-fluid text-center my-4 p-4 w-75 shadow bg-white rounded">
+<div class="container-fluid text-center my-4 py-4 w-75 shadow bg-white rounded">
     <% if (error) { %>
         <div class="alert alert-danger" role="alert">
             <%= error %>
@@ -38,22 +44,18 @@
     <div class="container bg-white rounded my-3 p-1">
         <h2>Filters</h2>
         <hr>
-        <div class="container-fluid mb-4 justify-content-center">
-            <form action="/api/books" method="GET" class="d-flex justify-content-center align-items-center mx-auto w-50 mb-2">
-                <label for="id" class="w-50 me-2">Search Book by ID: </label>
-                <input type="number" id="id" placeholder="Search by Book ID (e.g., 1)" name="id" class="form-control me-2">
-                <button type="submit" class="btn btn-secondary fs-5">Search</button>
-            </form>
+        <div class="container-fluid d-flex justify-content-center align-items-center mx-auto w-50 mb-2">
+            <label for="searchId" class="w-50 me-2">Search Book by ID: </label>
+            <input type="number" id="searchId" placeholder="Search by Book ID (e.g., 1)" name="searchId" class="form-control me-2" value="-1">
+            <button type="submit" id="searchIdButton" class="btn btn-secondary fs-5">Search</button>
         </div>
         <hr>
 
-        <form action="/api/books/filter" method="POST" class="mb-2">
+        <div class="mb-2">
             <div class="d-flex justify-content-center align-items-center mx-auto mb-2">
                 <label for="search" class="w-25 me-2">Search Book by Filters: </label>
-                <input type="text" id="search" placeholder="Search by title, author, or genre" name="search" class="form-control me-2">
+                <input type="text" id="search" placeholder="Search by title, author, and genre" name="search" class="form-control me-2">
             </div>
-
-
 
             <select id="genreFilter" name="genre" class="form-select d-inline-block w-auto">
                 <option value="none">All Genres</option>
@@ -74,20 +76,21 @@
                 <% }); %>
             </select>
             <select id="sortBy" name="sortBy" class="form-select d-inline-block w-auto">
+                <option value="none">No Sorts</option>
                 <option value="title">Sort by Title</option>
                 <option value="author">Sort by Author</option>
                 <option value="year">Sort by Year</option>
                 <option value="price">Sort by Price</option>
             </select>
 
-            <button type="submit" class="btn btn-secondary fs-5">Search</button>
-        </form>
+            <button id="searchButton" class="btn btn-secondary fs-5">Search</button>
+        </div>
     </div>
 
     <!-- Table -->
     <h2>Books:</h2>
         <hr>
-    <table class="table table-striped">
+    <table class="table table-striped" id="bookTable">
         <thead>
         <tr>
             <th style="width: 40px;">Book ID</th>
@@ -143,16 +146,19 @@
 </div>
 
 <script>
+    const table = document.querySelector('.table');
+
     async function updateBook(bookId) {
         try {
-            const bookRow = document.querySelector(`[data-book-id="${bookId}"]`);
+            console.log("HERE!")
+            let bookRow = document.querySelector(`[data-book-id="${bookId}"]`);
 
-            const title = bookRow.querySelector('.book-title').value;
-            const author = bookRow.querySelector('.book-author').value.split(',').map(a => a.trim());
-            const genre = bookRow.querySelector('.book-genre').value.split(',').map(g => g.trim());
-            const year = parseInt(bookRow.querySelector('.book-year').value);
-            const quantity = parseInt(bookRow.querySelector('.book-quantity').value);
-            const price = parseFloat(bookRow.querySelector('.book-price').value);
+            let title = bookRow.querySelector('.book-title').value;
+            let author = bookRow.querySelector('.book-author').value.split(',').map(a => a.trim());
+            let genre = bookRow.querySelector('.book-genre').value.split(',').map(g => g.trim());
+            let year = parseInt(bookRow.querySelector('.book-year').value);
+            let quantity = parseInt(bookRow.querySelector('.book-quantity').value);
+            let price = parseFloat(bookRow.querySelector('.book-price').value);
 
             const response = await fetch(`/api/books/${bookId}`, {
                 method: 'PUT',
@@ -187,6 +193,134 @@
             console.error(error);
             alert('Error deleting book');
         }
+    }
+
+    document.getElementById('searchIdButton').addEventListener('click', async function (event) {
+        event.preventDefault();
+
+        const id = document.getElementById('searchId').value;
+        const tbody = document.querySelector('#bookTable tbody');
+
+        // Validate input
+        if (isNaN(id)) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Please enter a valid book ID.</td></tr>';
+            return;
+        }
+
+        // Show loading indicator
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading...</td></tr>';
+
+        try {
+            const response = await fetch(`/api/books/${id}`, { method: 'GET' });
+
+            if (response.status === 404) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Book not found.</td></tr>';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch book details');
+            }
+
+            const data = await response.json();
+
+            if (data.error) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">${data.error}</td></tr>`;
+                return;
+            }
+
+
+            const books = Number(id) === -1 ? data.books : [data.books[0]];
+
+            rebuildTable(books)
+        } catch (error) {
+            console.error('Error:', error);
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">Error: ${error.message}</td></tr>`;
+        }
+    });
+
+    document.getElementById('searchButton').addEventListener('click', async function (event) {
+        event.preventDefault();
+
+        // Get filter and sort values
+        const search = document.getElementById('search').value;
+        const genre = document.getElementById('genreFilter').value;
+        const author = document.getElementById('authorFilter').value;
+        const year = document.getElementById('yearFilter').value;
+        const sortBy = document.getElementById('sortBy').value;
+        const tbody = document.querySelector('#bookTable tbody');
+
+        // Show loading indicator
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading...</td></tr>';
+
+        try {
+            const response = await fetch(`/api/books/filter`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ genre: genre, author: author, year: year, sortBy: sortBy, search: search })
+            });
+
+            if (!response.ok) {
+                console.log(response);
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            tbody.innerHTML = '';
+
+            if (data.error) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="8" style="text-align: center;">${data.error}</td>`;
+                tbody.appendChild(row);
+                return;
+            }
+
+            const books = data.books;
+
+            if (books.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="8" style="text-align: center;">No books available</td>`;
+                tbody.appendChild(row);
+                return;
+            }
+
+            rebuildTable(books);
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error during filtration: ' + error.message);
+        }
+    });
+
+    function rebuildTable(books) {
+        const tbody = document.querySelector('#bookTable tbody');
+        tbody.innerHTML = ''; // Clear existing rows
+
+        books.forEach(book => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-book-id', book.book_id);
+            row.setAttribute('data-title', book.title);
+            row.setAttribute('data-authors', book.authors.join(', '));
+            row.setAttribute('data-genres', book.genres.join(', '));
+            row.setAttribute('data-year', book.year);
+            row.setAttribute('data-quantity', book.quantity);
+            row.setAttribute('data-price', book.price);
+
+            row.innerHTML = `
+            <td>${book.book_id}</td>
+            <td><input type="text" class="book-title" value="${book.title}"></td>
+            <td><input type="text" class="book-author" value="${book.authors.join(', ')}"></td>
+            <td><input type="text" class="book-genre" value="${book.genres.join(', ')}"></td>
+            <td><input type="number" class="book-year" style="width: 80px;" value="${book.year}"></td>
+            <td><input type="number" class="book-quantity" style="width: 80px;" value="${book.quantity}"></td>
+            <td><input type="number" class="book-price" style="width: 80px;" value="${book.price}"></td>
+            <td>
+                <div>
+                    <button class="btn btn-outline-secondary mb-3" onclick="updateBook('${book.book_id}')">Update Book</button>
+                    <button class="btn btn-outline-danger mb-3" onclick="deleteBook('${book.book_id}')">Delete Book</button>
+                </div>
+            </td>`;
+            tbody.appendChild(row);
+        });
     }
 </script>
 </body>

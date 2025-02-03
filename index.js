@@ -111,77 +111,80 @@ app.get("/api/books", async (req, res) => {
 // Specific book by ID
 app.get("/api/books/:id", async (req, res) => {
     const book_id = Number(req.params.id);
-    console.log("2", book_id);
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    console.log(book_id)
+
+    // Validate input
+    if (isNaN(book_id)) {
+        return res.status(400).json({ books: [], error: "Invalid book ID" });
+    }
+
     try {
-        let books = await Book.find({ book_id: book_id }).skip(skip).limit(limit);
-        const totalBooks = await Book.countDocuments({ book_id: book_id });
+        const query = book_id === -1 ? {} : {book_id: book_id};
+        const books = await Book.find(query);
 
         if (!books || books.length === 0) {
             return res.status(404).json({ books: [], error: "Book not found" });
         }
 
-        const genres = await Book.distinct('genres');
-        const authors = await Book.distinct('authors');
-        const years = await Book.distinct('year');
-        console.log("HERE")
-        res.render('index', {
-            books: books,
-            totalPages: Math.ceil(totalBooks / limit),
-            currentPage: page,
-            genres: genres,
-            authors: authors,
-            years: years,
-            error: null,
-        });
+        res.json({ books: books, error: null });
     } catch (err) {
         console.error("Error retrieving book:", err);
-        res.status(500).json({ message: "Error retrieving books", error: err });
+        res.status(500).json({ books: [], error: "Internal server error" });
     }
 });
 
-// Filtering part
 app.post('/api/books/filter', async (req, res) => {
-    const { genre, author, year, sortBy, search } = req.query;
+    const genre = req.body.genre;
+    const author = req.body.author;
+    const year = req.body.year;
+    const sortBy = req.body.sortBy;
+    const search = req.body.search
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
     try {
         let query = {};
-
         if (genre !== "none") query.genres = { $in: [genre] };
-
         if (author !== "none") query.authors = { $in: [author] };
+        if (year !== "none") query.year = parseInt(year);
 
-        if (year !== "none") query.year = year;
-
-        if (search !== "") {
+        if (String(search) !== "") {
             query.$or = [
-                { title: { $regex: search, $options: 'i' } }
+                { title: { $regex: String(search), $options: 'i' } },
+                { authors: { $regex: String(search), $options: 'i' } },
+                { genres: { $regex: String(search), $options: 'i' } }
             ];
-        } else {
-            query.$or = [{ title: {} }];
         }
 
-        let books = await Book.find(query);
+        // Define sorting options
+        const sortOptions = {
+            title: { title: 1 },
+            author: { authors: 1 },
+            year: { year: 1 },
+            price: { price: 1 }
+        };
+        const sort = sortOptions[sortBy] || {};
 
-        if (sortBy) {
-            const sortOptions = {
-                title: { title: 1 },
-                author: { authors: 1 },
-                year: { year: 1 },
-                price: { price: 1 }
-            };
+        // Calculate pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
-            if (sortOptions[sortBy]) {
-                books = books.sort(sortOptions[sortBy]);
-            }
-        }
+        // Fetch paginated and sorted books
+        const books = await Book.find(query)
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit));
 
-        res.json(books);
+        // Count total documents for pagination
+        const totalBooks = await Book.countDocuments(query);
+
+        res.json({
+            books: books,
+            totalPages: Math.ceil(totalBooks / limit),
+            currentPage: page,
+        });
     } catch (err) {
-        res.status(500).json({ message: 'Error retrieving books', error: err });
+        console.error("Error retrieving books:", err);
+        res.status(500).json({ books: [], error: err.message });
     }
 });
 
